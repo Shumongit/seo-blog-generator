@@ -24,57 +24,66 @@ def generate_article_with_claude(theme_keyword, target_audience, article_purpose
     # プロンプト作成
     prompt = create_article_prompt(theme_keyword, target_audience, article_purpose, article_length, additional_notes)
     
-    # Claude API呼び出し
-    try:
-        headers = {
-            "Content-Type": "application/json",
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01"
-        }
-        
-        data = {
-            "model": "claude-3-5-sonnet-20241022",
-            "max_tokens": 4000,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        }
-        
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers=headers,
-            json=data,
-            timeout=60
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            article_content = result["content"][0]["text"]
-            return article_content, None
-        elif response.status_code == 401:
-            error_msg = "APIキーが無効です。正しいAPIキーを入力してください。"
-            return None, error_msg
-        elif response.status_code == 429:
-            error_msg = "API利用制限に達しました。しばらく待ってから再試行してください。"
-            return None, error_msg
-        elif response.status_code == 404:
-            error_msg = "指定されたモデルが見つかりません。システム管理者にお問い合わせください。"
-            return None, error_msg
-        else:
-            try:
-                error_detail = response.json()
-                error_msg = f"API Error: {response.status_code} - {error_detail.get('error', {}).get('message', 'Unknown error')}"
-            except:
-                error_msg = f"API Error: {response.status_code} - {response.text}"
-            return None, error_msg
+    # 試行するモデルのリスト（優先順位順）
+    models_to_try = [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-sonnet-20240620",
+        "claude-3-haiku-20240307"
+    ]
+    
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01"
+    }
+    
+    # 各モデルを順番に試行
+    for model in models_to_try:
+        try:
+            data = {
+                "model": model,
+                "max_tokens": 4000,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            }
             
-    except requests.exceptions.RequestException as e:
-        return None, f"接続エラー: {str(e)}"
-    except Exception as e:
-        return None, f"予期しないエラー: {str(e)}"
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers,
+                json=data,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                article_content = result["content"][0]["text"]
+                return article_content, None
+            elif response.status_code == 401:
+                return None, "APIキーが無効です。正しいAPIキーを入力してください。"
+            elif response.status_code == 429:
+                return None, "API利用制限に達しました。しばらく待ってから再試行してください。"
+            elif response.status_code == 404:
+                # このモデルが利用できない場合は次のモデルを試行
+                continue
+            else:
+                try:
+                    error_detail = response.json()
+                    error_msg = f"API Error: {response.status_code} - {error_detail.get('error', {}).get('message', 'Unknown error')}"
+                except:
+                    error_msg = f"API Error: {response.status_code} - {response.text}"
+                return None, error_msg
+                
+        except requests.exceptions.RequestException as e:
+            continue  # ネットワークエラーの場合は次のモデルを試行
+        except Exception as e:
+            continue  # その他のエラーの場合も次のモデルを試行
+    
+    # 全てのモデルで失敗した場合
+    return None, "利用可能なClaudeモデルが見つかりません。APIキーまたはアカウントの設定を確認してください。"
 
 def create_article_prompt(theme_keyword, target_audience, article_purpose, article_length, additional_notes):
     """記事生成用のプロンプトを作成"""
