@@ -33,7 +33,7 @@ def generate_article_with_claude(theme_keyword, target_audience, article_purpose
         }
         
         data = {
-            "model": "claude-3-haiku-20240307",
+            "model": "claude-3-sonnet-20240229",
             "max_tokens": 4000,
             "messages": [
                 {
@@ -450,32 +450,43 @@ def display_generated_article():
             )
         
         # 記事統計とSEO分析
-        article_stats = analyze_article(st.session_state.generated_article)
-        st.markdown("**📊 記事統計とSEO分析:**")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("文字数", f"{article_stats['char_count']:,}")
-        with col2:
-            st.metric("段落数", article_stats['paragraph_count'])
-        with col3:
-            st.metric("見出し数", article_stats['heading_count'])
-        with col4:
-            st.metric("推定読了時間", f"{article_stats['reading_time']}分")
-        
-        # SEO分析結果
-        seo_analysis = analyze_seo_elements(st.session_state.generated_article, st.session_state.article_metadata['theme_keyword'])
-        
-        st.markdown("**🔍 SEO分析結果:**")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write(f"**キーワード出現回数:** {seo_analysis['keyword_count']}回")
-            st.write(f"**キーワード密度:** {seo_analysis['keyword_density']:.1f}%")
+        try:
+            article_stats = analyze_article(st.session_state.generated_article)
+            st.markdown("**📊 記事統計とSEO分析:**")
             
-        with col2:
-            st.write(f"**見出しにキーワード含有:** {'✅' if seo_analysis['keyword_in_headings'] else '❌'}")
-            st.write(f"**適切な文字数:** {'✅' if seo_analysis['appropriate_length'] else '❌'}")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("文字数", f"{article_stats['char_count']:,}")
+            with col2:
+                st.metric("段落数", article_stats['paragraph_count'])
+            with col3:
+                st.metric("見出し数", article_stats['heading_count'])
+            with col4:
+                st.metric("推定読了時間", f"{article_stats['reading_time']}分")
+            
+            # SEO分析結果
+            if 'theme_keyword' in st.session_state.article_metadata:
+                seo_analysis = analyze_seo_elements(
+                    st.session_state.generated_article, 
+                    st.session_state.article_metadata['theme_keyword']
+                )
+                
+                st.markdown("**🔍 SEO分析結果:**")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**キーワード出現回数:** {seo_analysis['keyword_count']}回")
+                    st.write(f"**キーワード密度:** {seo_analysis['keyword_density']:.1f}%")
+                    
+                with col2:
+                    st.write(f"**見出しにキーワード含有:** {'✅' if seo_analysis['keyword_in_headings'] else '❌'}")
+                    st.write(f"**適切な文字数:** {'✅' if seo_analysis['appropriate_length'] else '❌'}")
+            else:
+                st.warning("SEO分析には記事のメタデータが必要です")
+                
+        except Exception as e:
+            st.error(f"記事分析でエラーが発生しました: {str(e)}")
+            st.write("記事は正常に生成されましたが、統計分析が実行できませんでした。")
 
 def validate_inputs(theme_keyword, target_audience, article_purpose):
     """入力値を検証"""
@@ -563,6 +574,30 @@ def analyze_article(article_content):
         'paragraph_count': paragraph_count,
         'heading_count': heading_count,
         'reading_time': reading_time
+    }
+
+def analyze_seo_elements(article_content, main_keyword):
+    """SEO要素を分析"""
+    # 基本統計
+    total_chars = len(article_content)
+    words = article_content.split()
+    
+    # キーワード分析
+    keyword_count = article_content.lower().count(main_keyword.lower())
+    keyword_density = (keyword_count / len(words)) * 100 if words else 0
+    
+    # 見出し分析
+    headings = [line for line in article_content.split('\n') if line.strip().startswith('#')]
+    keyword_in_headings = any(main_keyword.lower() in heading.lower() for heading in headings)
+    
+    # 文字数判定（1500-4000文字が理想的）
+    appropriate_length = 1500 <= total_chars <= 4000
+    
+    return {
+        'keyword_count': keyword_count,
+        'keyword_density': keyword_density,
+        'keyword_in_headings': keyword_in_headings,
+        'appropriate_length': appropriate_length
     }
 
 if __name__ == "__main__":
