@@ -33,7 +33,7 @@ def generate_article_with_claude(theme_keyword, target_audience, article_purpose
         }
         
         data = {
-            "model": "claude-3-sonnet-20240229",
+            "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 4000,
             "messages": [
                 {
@@ -54,8 +54,21 @@ def generate_article_with_claude(theme_keyword, target_audience, article_purpose
             result = response.json()
             article_content = result["content"][0]["text"]
             return article_content, None
+        elif response.status_code == 401:
+            error_msg = "APIキーが無効です。正しいAPIキーを入力してください。"
+            return None, error_msg
+        elif response.status_code == 429:
+            error_msg = "API利用制限に達しました。しばらく待ってから再試行してください。"
+            return None, error_msg
+        elif response.status_code == 404:
+            error_msg = "指定されたモデルが見つかりません。システム管理者にお問い合わせください。"
+            return None, error_msg
         else:
-            error_msg = f"API Error: {response.status_code} - {response.text}"
+            try:
+                error_detail = response.json()
+                error_msg = f"API Error: {response.status_code} - {error_detail.get('error', {}).get('message', 'Unknown error')}"
+            except:
+                error_msg = f"API Error: {response.status_code} - {response.text}"
             return None, error_msg
             
     except requests.exceptions.RequestException as e:
